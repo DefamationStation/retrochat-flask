@@ -31,9 +31,10 @@ def send_message():
             # Log the reset command handling
             print("Received /chat reset command. Clearing chat history.")
             
-            # Clear the chat history
-            session.pop('chat_history', None)
-            save_chat_history([])  # Save an empty list to clear the file
+            # Reset the chat history to only include the system prompt
+            initial_history = [{'role': 'system', 'content': " "}]
+            session['chat_history'] = initial_history
+            save_chat_history(initial_history)
             return jsonify('Chat history has been reset.')
 
         chat_history = session.get('chat_history', load_chat_history())
@@ -42,8 +43,7 @@ def send_message():
         chat_history.append({'role': 'user', 'content': user_input})
         
         # Update chat history to use correct role names for the API
-        formatted_history = [{'role': 'user', 'content': msg['content']} if msg['role'] == 'user' 
-                             else {'role': 'assistant', 'content': msg['content']} for msg in chat_history]
+        formatted_history = [{'role': msg['role'], 'content': msg['content']} for msg in chat_history]
         
         data = {
             'model': 'llama3:8b-instruct-q6_K',
