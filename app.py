@@ -39,11 +39,12 @@ def send_message():
         # Check for the /chat reset command
         if user_input.strip().lower() == '/chat reset':
             print("Received /chat reset command. Clearing chat history.")
-            # Clear the chat history in session and file
-            session.pop('chat_history', None)
-            # Ensure to clear the session file link as well
-            save_chat_history([], chat_file)  # Save an empty list to clear the file
-            return jsonify('Chat history has been reset.')
+            # Retain only the system prompt in the chat history
+            system_prompt = next((msg for msg in chat_history if msg.get('role') == 'system'), None)
+            new_history = [system_prompt] if system_prompt else []
+            save_chat_history(new_history, chat_file)
+            session['chat_history'] = new_history
+            return jsonify('Chat history has been reset, system prompt retained.')
 
         # Check for the /chat rename command
         if user_input.strip().lower().startswith('/chat rename '):

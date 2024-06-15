@@ -75,19 +75,27 @@
         }
 
         /* Apply negative margin to reduce spacing between messages */
-        .user-message, .ai-message {
+        .user-message, .ai-message, .system-message {
             margin-bottom: -2px; /* Adjusted negative margin to reduce spacing */
             padding: 0; /* Ensure no padding */
             word-wrap: break-word;
             white-space: pre-wrap;
         }
 
+        .user-message {
+            color: #00FF00; /* Green text for user messages */
+        }
+
         .ai-message {
             color: #FFBF00; /* Amber text for AI messages */
         }
 
+        .system-message {
+            color: #888888; /* Gray text for system messages */
+        }
+
         /* Adjust paragraph spacing within messages */
-        .user-message p, .ai-message p {
+        .user-message p, .ai-message p, .system-message p {
             margin: -4px 0; /* Reduced margin between paragraphs */
             line-height: 1.0; /* Adjust line height if needed */
         }
@@ -117,9 +125,9 @@
                 body: JSON.stringify({message: message})
             }).then(response => response.json())
             .then(data => {
-                if (data === 'Chat history has been reset.') {
-                    // Clear the chatbox
-                    document.getElementById('chatbox').innerHTML = '';
+                if (data === 'Chat history has been reset, system prompt retained.') {
+                    // Load only the system prompt or clear the chatbox UI
+                    loadChatHistory();
                 } else {
                     updateChatbox(data.error || data, 'ai');
                 }
@@ -136,6 +144,8 @@
             messageElement.innerHTML = parsedContent;
             if (type === 'ai') {
                 messageElement.classList.add('ai-message'); // Apply amber color for AI messages
+            } else if (type === 'system') {
+                messageElement.classList.add('system-message'); // Apply gray color for system messages
             } else {
                 messageElement.classList.add('user-message'); // Apply green color for user messages
             }
@@ -150,9 +160,9 @@
             fetch('/get_history')
                 .then(response => response.json())
                 .then(history => {
+                    document.getElementById('chatbox').innerHTML = ''; // Clear the chatbox
                     history.forEach(item => {
-                        // Update the role to match the class names
-                        const role = item.role === 'user' ? 'user' : 'ai';
+                        const role = item.role === 'user' ? 'user' : (item.role === 'system' ? 'system' : 'ai');
                         updateChatbox(item.content, role);
                     });
                 })
