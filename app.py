@@ -4,15 +4,15 @@ import os
 import json
 
 app = Flask(__name__)
-app.secret_key = 'secretkey'  # Replace with a secure key
+app.secret_key = 'seth2113'  # Replace with a secure key
 API_URL = 'http://192.168.1.82:11434/api/chat'
 CHAT_HISTORY_FILE = 'chat_history.json'
 
 def load_chat_history():
-    if os.path.exists(CHAT_HISTORY_FILE):
-        with open(CHAT_HISTORY_FILE, 'r') as file:
-            return json.load(file)
-    return []
+    if not os.path.exists(CHAT_HISTORY_FILE) or os.path.getsize(CHAT_HISTORY_FILE) == 0:
+        return []
+    with open(CHAT_HISTORY_FILE, 'r') as file:
+        return json.load(file)
 
 def save_chat_history(history):
     with open(CHAT_HISTORY_FILE, 'w') as file:
@@ -26,23 +26,25 @@ def index():
 def send_message():
     try:
         user_input = request.json['message']
-        
-        if user_input.strip().lower() == '/chat reset':
-            # Log the reset command handling
-            print("Received /chat reset command. Clearing chat history.")
-            
-            # Reset the chat history to only include the system prompt
-            initial_history = [{'role': 'system', 'content': " "}]
-            session['chat_history'] = initial_history
-            save_chat_history(initial_history)
-            return jsonify('Chat history has been reset.')
-
         chat_history = session.get('chat_history', load_chat_history())
-        
+
+        # Check for the /system command
+        if user_input.strip().lower().startswith('/system '):
+            system_prompt = user_input[len('/system '):].strip()
+            print(f"Setting system prompt to: {system_prompt}")
+            # Replace any existing system prompt or add if none exists
+            if chat_history and chat_history[0].get('role') == 'system':
+                chat_history[0]['content'] = system_prompt
+            else:
+                chat_history.insert(0, {'role': 'system', 'content': system_prompt})
+            session['chat_history'] = chat_history
+            save_chat_history(chat_history)
+            return jsonify(f'System prompt set to: "{system_prompt}"')
+
         # Append the user's message to the chat history
         chat_history.append({'role': 'user', 'content': user_input})
-        
-        # Update chat history to use correct role names for the API
+
+        # Prepare the history for the API, ensuring the system prompt is included if set
         formatted_history = [{'role': msg['role'], 'content': msg['content']} for msg in chat_history]
         
         data = {
