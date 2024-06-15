@@ -73,6 +73,12 @@ def send_message():
             session['chat_file'] = new_file
             return jsonify(f"Chat '{new_chat}' opened.")
 
+        # Check for the /chat list command
+        if user_input.strip().lower() == '/chat list':
+            chat_files = [f for f in os.listdir('.') if f.endswith('.json')]
+            chat_names = [os.path.splitext(f)[0] for f in chat_files]
+            return jsonify(f"Available chats: {', '.join(chat_names)}")
+
         # Check for the /system command
         if user_input.strip().lower().startswith('/system '):
             system_prompt = user_input[len('/system '):].strip()
