@@ -125,7 +125,10 @@
                 body: JSON.stringify({message: message})
             }).then(response => response.json())
             .then(data => {
-                if (data === 'Chat history has been reset, system prompt retained.') {
+                if (data[1] && data[1].refresh) {
+                    // Refresh the page if indicated by the server response
+                    location.reload();
+                } else if (data === 'Chat history has been reset, system prompt retained.') {
                     // Load only the system prompt or clear the chatbox UI
                     loadChatHistory();
                 } else {

@@ -61,7 +61,8 @@ def send_message():
             if chat_file != DEFAULT_CHAT_FILE:
                 os.remove(chat_file)
                 session.pop('chat_file', None)
-                return jsonify(f"Chat '{chat_file}' deleted.")
+                # Signal the need to refresh the page
+                return jsonify(f"Chat '{chat_file}' deleted. Please refresh the page.", {'refresh': True})
             else:
                 return jsonify("Cannot delete the default chat.")
 
@@ -72,7 +73,8 @@ def send_message():
             if not os.path.exists(new_file):
                 save_chat_history([], new_file)  # Create the file with an empty history
             session['chat_file'] = new_file
-            return jsonify(f"Chat '{new_chat}' opened.")
+            # Signal the need to refresh the page
+            return jsonify(f"Chat '{new_chat}' opened. Please refresh the page.", {'refresh': True})
 
         # Check for the /chat list command
         if user_input.strip().lower() == '/chat list':
