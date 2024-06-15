@@ -28,6 +28,14 @@ def send_message():
         user_input = request.json['message']
         chat_history = session.get('chat_history', load_chat_history())
 
+        # Check for the /chat reset command
+        if user_input.strip().lower() == '/chat reset':
+            print("Received /chat reset command. Clearing chat history.")
+            # Clear the chat history in session and file
+            session.pop('chat_history', None)
+            save_chat_history([])  # Save an empty list to clear the file
+            return jsonify('Chat history has been reset.')
+
         # Check for the /system command
         if user_input.strip().lower().startswith('/system '):
             system_prompt = user_input[len('/system '):].strip()
