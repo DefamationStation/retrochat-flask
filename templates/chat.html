@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with AI</title>
+    <style>
+        /* Your existing styles */
+        body {
+            background-color: #000000; /* AMOLED black */
+            font-family: 'Courier New', Courier, monospace; /* Terminal style font */
+            color: #00FF00; /* Green text */
+            margin: 0; /* Remove default margin */
+            display: flex;
+            flex-direction: column;
+            height: 100vh; /* Full height */
+            overflow: hidden; /* Prevent body from scrolling */
+        }
+
+        #chatbox {
+            flex: 1; /* Takes up all available space */
+            overflow-y: auto; /* Allow vertical scrolling */
+            padding: 20px;
+            background-color: #000000; /* AMOLED black */
+            color: #00FF00; /* Green text for user messages */
+            box-sizing: border-box; /* Include padding in the element's total width and height */
+        }
+
+        /* Apply different styles for larger screens (desktop) */
+        @media (min-width: 768px) {
+            #chatbox {
+                margin-bottom: 0; /* Remove extra bottom margin for desktops */
+                padding-bottom: 50px; /* Increased bottom padding for mobile */
+            }
+        }
+
+        /* Mobile-specific styles */
+        @media (max-width: 767px) {
+            #chatbox {
+                padding-top: 60px; /* Increased top padding for mobile */
+                padding-bottom: 100px; /* Increased bottom padding for mobile */
+            }
+        }
+
+        #user_input_container {
+            display: flex;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: #000000; /* AMOLED black */
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 10; /* Ensure it's above other elements */
+        }
+
+        #prompt {
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+
+        #user_input {
+            flex: 1; /* Take up the rest of the space */
+            background-color: #000000; /* AMOLED black */
+            color: #00FF00; /* Green text */
+            border: none; /* Remove border */
+            outline: none; /* Remove outline */
+            font-size: 1.2em;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        #user_input::placeholder {
+            color: #00FF00; /* Green text for placeholder */
+            opacity: 0.6; /* Slightly transparent */
+        }
+
+        /* Apply negative margin to reduce spacing between messages */
+        .user-message, .ai-message {
+            margin-bottom: -2px; /* Adjusted negative margin to reduce spacing */
+            padding: 0; /* Ensure no padding */
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        .ai-message {
+            color: #FFBF00; /* Amber text for AI messages */
+        }
+
+        /* Adjust paragraph spacing within messages */
+        .user-message p, .ai-message p {
+            margin: -4px 0; /* Reduced margin between paragraphs */
+            line-height: 1.0; /* Adjust line height if needed */
+        }
+    </style>
+</head>
+<body>
+    <div id="chatbox"></div>
+    <div id="user_input_container">
+        <span id="prompt">&gt;</span>
+        <input type="text" id="user_input" placeholder="Type your message..." onkeypress="if(event.keyCode == 13) sendMessage()">
+    </div>
+
+    <!-- Include Marked.js and DOMPurify -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@2.3.4/dist/purify.min.js"></script>
+
+    <script>
+        function sendMessage() {
+            var input = document.getElementById('user_input');
+            var message = input.value;
+            input.value = '';
+            updateChatbox(message, 'user');
+
+            fetch('/send_message', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: message})
+            }).then(response => response.json())
+            .then(data => {
+                if (data === 'Chat history has been reset.') {
+                    // Clear the chatbox
+                    document.getElementById('chatbox').innerHTML = '';
+                } else {
+                    updateChatbox(data.error || data, 'ai');
+                }
+            }).catch(err => console.error('Error:', err));
+        }
+
+        function updateChatbox(msg, type) {
+            var chatbox = document.getElementById('chatbox');
+            var messageElement = document.createElement('div');
+
+            // Parse the Markdown and sanitize the HTML
+            var parsedContent = DOMPurify.sanitize(marked.parse(msg));
+
+            messageElement.innerHTML = parsedContent;
+            if (type === 'ai') {
+                messageElement.classList.add('ai-message'); // Apply amber color for AI messages
+            } else {
+                messageElement.classList.add('user-message'); // Apply green color for user messages
+            }
+            chatbox.appendChild(messageElement);
+
+            // Scroll to the bottom after adding a new message
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        // Load chat history from the server
+        function loadChatHistory() {
+            fetch('/get_history')
+                .then(response => response.json())
+                .then(history => {
+                    history.forEach(item => {
+                        // Update the role to match the class names
+                        const role = item.role === 'user' ? 'user' : 'ai';
+                        updateChatbox(item.content, role);
+                    });
+                })
+                .catch(err => console.error('Error loading history:', err));
+        }
+
+        // Call the function to load chat history on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadChatHistory();
+        });
+
+        // Ensure the input box is visible when focused
+        document.getElementById('user_input').addEventListener('focus', function() {
+            adjustChatboxHeight();
+            var chatbox = document.getElementById('chatbox');
+            setTimeout(() => chatbox.scrollTop = chatbox.scrollHeight, 300); // Delay to allow for any keyboard animations
+        });
+
+        // Adjust the chatbox height dynamically
+        window.addEventListener('resize', adjustChatboxHeight);
+
+        function adjustChatboxHeight() {
+            var inputContainer = document.getElementById('user_input_container');
+            var chatbox = document.getElementById('chatbox');
+            var availableHeight = window.innerHeight - inputContainer.offsetHeight;
+            chatbox.style.height = availableHeight + 'px';
+        }
+
+        // Call the function initially to set the correct height
+        adjustChatboxHeight();
+
+        // Ensure the chatbox scrolls to the bottom on load
+        document.addEventListener('DOMContentLoaded', function() {
+            var chatbox = document.getElementById('chatbox');
+            chatbox.scrollTop = chatbox.scrollHeight;
+        });
+    </script>
+</body>
+</html>

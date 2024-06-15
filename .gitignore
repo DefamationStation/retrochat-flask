@@ -1,0 +1,5 @@
+.aider*
+/env
+.env
+chat_history.json
+*.json
