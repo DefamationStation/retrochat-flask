@@ -4,18 +4,25 @@ import os
 import json
 
 app = Flask(__name__)
-app.secret_key = 'secretey'  # Replace with a secure key
+app.secret_key = 'secretkey'  # Replace with a secure key
 API_URL = 'http://192.168.1.82:11434/api/chat'
-CHAT_HISTORY_FILE = 'chat_history.json'
+DEFAULT_CHAT_FILE = 'chat_history.json'
 
-def load_chat_history():
-    if not os.path.exists(CHAT_HISTORY_FILE) or os.path.getsize(CHAT_HISTORY_FILE) == 0:
+def get_current_chat_file():
+    return session.get('chat_file', DEFAULT_CHAT_FILE)
+
+def load_chat_history(chat_file=None):
+    if chat_file is None:
+        chat_file = get_current_chat_file()
+    if not os.path.exists(chat_file) or os.path.getsize(chat_file) == 0:
         return []
-    with open(CHAT_HISTORY_FILE, 'r') as file:
+    with open(chat_file, 'r') as file:
         return json.load(file)
 
-def save_chat_history(history):
-    with open(CHAT_HISTORY_FILE, 'w') as file:
+def save_chat_history(history, chat_file=None):
+    if chat_file is None:
+        chat_file = get_current_chat_file()
+    with open(chat_file, 'w') as file:
         json.dump(history, file)
 
 @app.route('/')
@@ -26,27 +33,47 @@ def index():
 def send_message():
     try:
         user_input = request.json['message']
-        chat_history = session.get('chat_history', load_chat_history())
+        chat_file = get_current_chat_file()
+        chat_history = load_chat_history(chat_file)
 
-        # Check for the /chat reset command
-        if user_input.strip().lower() == '/chat reset':
-            print("Received /chat reset command. Clearing chat history.")
-            # Clear the chat history in session and file
-            session.pop('chat_history', None)
-            save_chat_history([])  # Save an empty list to clear the file
-            return jsonify('Chat history has been reset.')
+        # Check for the /chat rename command
+        if user_input.strip().lower().startswith('/chat rename '):
+            new_name = user_input[len('/chat rename '):].strip()
+            new_file = f"{new_name}.json"
+            if os.path.exists(new_file):
+                return jsonify(f"Chat file '{new_file}' already exists.")
+            os.rename(chat_file, new_file)
+            session['chat_file'] = new_file
+            return jsonify(f"Chat renamed to '{new_name}'.")
+
+        # Check for the /chat delete command
+        if user_input.strip().lower() == '/chat delete':
+            if chat_file != DEFAULT_CHAT_FILE:
+                os.remove(chat_file)
+                session.pop('chat_file', None)
+                return jsonify(f"Chat '{chat_file}' deleted.")
+            else:
+                return jsonify("Cannot delete the default chat.")
+
+        # Check for the /chat open command
+        if user_input.strip().lower().startswith('/chat open '):
+            new_chat = user_input[len('/chat open '):].strip()
+            new_file = f"{new_chat}.json"
+            if not os.path.exists(new_file):
+                save_chat_history([], new_file)  # Create the file with an empty history
+            session['chat_file'] = new_file
+            return jsonify(f"Chat '{new_chat}' opened.")
 
         # Check for the /system command
         if user_input.strip().lower().startswith('/system '):
             system_prompt = user_input[len('/system '):].strip()
             print(f"Setting system prompt to: {system_prompt}")
-            # Replace any existing system prompt or add if none exists
             if chat_history and chat_history[0].get('role') == 'system':
                 chat_history[0]['content'] = system_prompt
             else:
                 chat_history.insert(0, {'role': 'system', 'content': system_prompt})
             session['chat_history'] = chat_history
-            save_chat_history(chat_history)
+            save_chat_history(chat_history, chat_file)
             return jsonify(f'System prompt set to: "{system_prompt}"')
 
         # Append the user's message to the chat history
@@ -68,7 +95,7 @@ def send_message():
             # Append the AI's response to the chat history with the correct role
             chat_history.append({'role': 'assistant', 'content': ai_response})
             session['chat_history'] = chat_history
-            save_chat_history(chat_history)
+            save_chat_history(chat_history, chat_file)
             return jsonify(ai_response)
         else:
             print(f"Error: Received status code {response.status_code}")
@@ -80,7 +107,8 @@ def send_message():
 
 @app.route('/get_history', methods=['GET'])
 def get_history():
-    chat_history = session.get('chat_history', load_chat_history())
+    chat_file = get_current_chat_file()
+    chat_history = load_chat_history(chat_file)
     return jsonify(chat_history)
 
 if __name__ == '__main__':
