@@ -4,7 +4,7 @@ import os
 import json
 
 app = Flask(__name__)
-app.secret_key = 'seth2113'  # Replace with a secure key
+app.secret_key = 'secretey'  # Replace with a secure key
 API_URL = 'http://192.168.1.82:11434/api/chat'
 CHAT_HISTORY_FILE = 'chat_history.json'
 
