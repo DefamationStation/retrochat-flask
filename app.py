@@ -83,8 +83,8 @@ def send_message():
             return jsonify(f"Available chats: {', '.join(chat_names)}")
 
         # Check for the /system command
-        if user_input.strip().lower().startswith('/system '):
-            system_prompt = user_input[len('/system '):].strip()
+        if user_input.strip().lower().startswith('/system'):
+            system_prompt = user_input[len('/system'):].strip()
             print(f"Setting system prompt to: {system_prompt}")
             if chat_history and chat_history[0].get('role') == 'system':
                 chat_history[0]['content'] = system_prompt
@@ -92,7 +92,7 @@ def send_message():
                 chat_history.insert(0, {'role': 'system', 'content': system_prompt})
             session['chat_history'] = chat_history
             save_chat_history(chat_history, chat_file)
-            return jsonify(f'System prompt set to: "{system_prompt}"')
+            return jsonify({'message': f'System prompt set to: "{system_prompt}"', 'system_prompt': system_prompt})
 
         # Append the user's message to the chat history
         chat_history.append({'role': 'user', 'content': user_input})
@@ -128,6 +128,13 @@ def get_history():
     chat_file = get_current_chat_file()
     chat_history = load_chat_history(chat_file)
     return jsonify(chat_history)
+
+@app.route('/get_system_prompt', methods=['GET'])
+def get_system_prompt():
+    chat_file = get_current_chat_file()
+    chat_history = load_chat_history(chat_file)
+    system_prompt = next((msg['content'] for msg in chat_history if msg.get('role') == 'system'), 'No system prompt set')
+    return jsonify({'system_prompt': system_prompt})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)

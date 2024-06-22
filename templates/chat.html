@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat with AI</title>
+    <title>Retrochat</title>
     <style>
-        /* Your existing styles */
         body {
             background-color: #000000; /* AMOLED black */
             font-family: 'Courier New', Courier, monospace; /* Terminal style font */
@@ -16,6 +15,17 @@
             height: 100vh; /* Full height */
             overflow: hidden; /* Prevent body from scrolling */
         }
+
+        /* Remove the system_prompt CSS block */
+        /*
+        #system_prompt {
+            padding: 10px;
+            background-color: #000000; 
+            color: #888888; 
+            text-align: center;
+            font-size: 1.1em;
+        }
+        */
 
         #chatbox {
             flex: 1; /* Takes up all available space */
@@ -102,6 +112,8 @@
     </style>
 </head>
 <body>
+    <!-- Removed the system_prompt div -->
+    <!-- <div id="system_prompt" class="system-message"></div> -->
     <div id="chatbox"></div>
     <div id="user_input_container">
         <span id="prompt">&gt;</span>
@@ -126,13 +138,11 @@
             }).then(response => response.json())
             .then(data => {
                 if (data[1] && data[1].refresh) {
-                    // Refresh the page if indicated by the server response
                     location.reload();
                 } else if (data === 'Chat history has been reset, system prompt retained.') {
-                    // Load only the system prompt or clear the chatbox UI
                     loadChatHistory();
                 } else {
-                    updateChatbox(data.error || data, 'ai');
+                    updateChatbox(data.error || data.message || data, 'ai');
                 }
             }).catch(err => console.error('Error:', err));
         }
@@ -140,21 +150,18 @@
         function updateChatbox(msg, type) {
             var chatbox = document.getElementById('chatbox');
             var messageElement = document.createElement('div');
-
-            // Parse the Markdown and sanitize the HTML
+            
             var parsedContent = DOMPurify.sanitize(marked.parse(msg));
 
             messageElement.innerHTML = parsedContent;
             if (type === 'ai') {
-                messageElement.classList.add('ai-message'); // Apply amber color for AI messages
+                messageElement.classList.add('ai-message');
             } else if (type === 'system') {
-                messageElement.classList.add('system-message'); // Apply gray color for system messages
+                messageElement.classList.add('system-message');
             } else {
-                messageElement.classList.add('user-message'); // Apply green color for user messages
+                messageElement.classList.add('user-message');
             }
             chatbox.appendChild(messageElement);
-
-            // Scroll to the bottom after adding a new message
             chatbox.scrollTop = chatbox.scrollHeight;
         }
 
@@ -171,6 +178,13 @@
                 })
                 .catch(err => console.error('Error loading history:', err));
         }
+
+        // Remove function updateSystemPrompt as it's no longer needed
+        /*
+        function updateSystemPrompt(newPrompt) {
+            document.getElementById('system_prompt').innerText = newPrompt;
+        }
+        */
 
         // Call the function to load chat history on page load
         document.addEventListener('DOMContentLoaded', function() {
