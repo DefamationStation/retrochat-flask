@@ -131,20 +131,23 @@
             input.value = '';
             updateChatbox(message, 'user');
 
-            fetch('/send_message', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({message: message})
-            }).then(response => response.json())
-            .then(data => {
-                if (data[1] && data[1].refresh) {
-                    location.reload();
-                } else if (data === 'Chat history has been reset, system prompt retained.') {
-                    loadChatHistory();
+            var eventSource = new EventSource('/send_message_stream?message=' + encodeURIComponent(message));
+
+            eventSource.onmessage = function(event) {
+                if (event.data === '[DONE]') {
+                    eventSource.close();
+                } else if (event.data.startsWith('[ERROR]')) {
+                    console.error('Error:', event.data);
+                    updateChatbox('Error occurred: ' + event.data, 'system');
                 } else {
-                    updateChatbox(data.error || data.message || data, 'ai');
+                    updateChatbox(event.data, 'ai');
                 }
-            }).catch(err => console.error('Error:', err));
+            };
+
+            eventSource.onerror = function(err) {
+                console.error('EventSource failed:', err);
+                eventSource.close();
+            };
         }
 
         function updateChatbox(msg, type) {
