@@ -125,14 +125,12 @@
                 body: JSON.stringify({message: message})
             }).then(response => response.json())
             .then(data => {
-                if (data[1] && data[1].refresh) {
-                    // Refresh the page if indicated by the server response
+                if (data.refresh) {
                     location.reload();
-                } else if (data === 'Chat history has been reset, system prompt retained.') {
-                    // Load only the system prompt or clear the chatbox UI
-                    loadChatHistory();
+                } else if (data.error) {
+                    updateChatbox(data.error, 'system');
                 } else {
-                    updateChatbox(data.error || data, 'ai');
+                    updateChatbox(data.message, 'ai');
                 }
             }).catch(err => console.error('Error:', err));
         }
