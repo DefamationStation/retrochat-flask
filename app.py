@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session, g, redirect
+from flask import Flask, render_template, request, jsonify, session, g, redirect, Response
 import requests
 import os
 import json
@@ -14,14 +14,15 @@ class ChatHistoryManager:
     def __init__(self, db_file: str, chat_name: str = 'default'):
         self.db_file = db_file
         self.chat_name = chat_name
+        self._create_tables()
 
     def get_connection(self):
         if 'conn' not in g:
             g.conn = sqlite3.connect(self.db_file)
-            self._create_tables(g.conn)
         return g.conn
 
-    def _create_tables(self, conn):
+    def _create_tables(self):
+        conn = sqlite3.connect(self.db_file)
         with conn:
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -40,6 +41,7 @@ class ChatHistoryManager:
                     FOREIGN KEY(session_id) REFERENCES chat_sessions(id)
                 )
             ''')
+        conn.close()
 
     def _get_session_id(self, conn, chat_name: str):
         cursor = conn.cursor()
@@ -115,9 +117,9 @@ def teardown_request(exception):
 
 @app.route('/')
 def index():
-    if 'mode' not in session or 'model' not in session:
-        return redirect('/select_mode')
-    return render_template('chat.html')
+    session.pop('mode', None)
+    session.pop('model', None)
+    return redirect('/select_mode')
 
 @app.route('/select_mode', methods=['GET', 'POST'])
 def select_mode():
@@ -130,9 +132,15 @@ def select_mode():
 def select_model():
     if request.method == 'POST':
         session['model'] = request.form['model']
-        return redirect('/')
+        return redirect('/chat')
     models = get_ollama_models()
     return render_template('select_model.html', models=models)
+
+@app.route('/chat')
+def chat():
+    if 'mode' not in session or 'model' not in session:
+        return redirect('/select_mode')
+    return render_template('chat.html')
 
 def get_ollama_models():
     url = "http://192.168.1.82:11434/api/tags"
@@ -145,47 +153,36 @@ def get_ollama_models():
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
-    try:
-        user_input = request.json['message']
-        chat_history = history_manager.load_history()
+    user_input = request.json['message']
+    chat_history = history_manager.load_history()
 
-        # Process commands
-        if user_input.strip().startswith('/'):
-            return handle_commands(user_input, chat_history)
+    if user_input.strip().startswith('/'):
+        return handle_commands(user_input, chat_history)
 
-        # Append user's message to chat history
-        chat_history.append({'role': 'user', 'content': user_input})
+    chat_history.append({'role': 'user', 'content': user_input})
+    history_manager.save_history(chat_history)
 
-        # Prepare data for API call based on mode
-        data = {
-            'messages': [{'role': msg['role'], 'content': msg['content']} for msg in chat_history],
-            'stream': False
-        }
+    data = {
+        'model': session.get('model', 'default_model'),
+        'messages': [{'role': msg['role'], 'content': msg['content']} for msg in chat_history],
+        'stream': True
+    }
 
-        if session.get('mode') == 'Ollama':
-            data['model'] = session.get('model', 'default_model')
-            response = requests.post(API_URL, json=data)
-        elif session.get('mode') == 'Anthropic':
-            data['model'] = 'claude-3-5-sonnet-20240620'
-            response = requests.post('https://api.anthropic.com/v1/messages', json=data, headers={
-                "X-API-Key": os.getenv('ANTHROPIC_API_KEY')
-            })
-        elif session.get('mode') == 'OpenAI':
-            data['model'] = 'gpt-4'
-            response = requests.post('https://api.openai.com/v1/chat/completions', json=data, headers={
-                "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"
-            })
+    def generate():
+        response = requests.post(API_URL, json=data, stream=True)
+        complete_message = ""
+        for line in response.iter_lines():
+            if line:
+                response_json = json.loads(line)
+                message_content = response_json.get('message', {}).get('content', '')
+                complete_message += message_content
+                yield f"data: {json.dumps({'content': message_content})}\n\n"
+                if response_json.get('done', False):
+                    break
+        chat_history.append({'role': 'assistant', 'content': complete_message})
+        history_manager.save_history(chat_history)
 
-        if response.status_code == 200:
-            ai_response = response.json()['message']['content']
-            chat_history.append({'role': 'assistant', 'content': ai_response})
-            history_manager.save_history(chat_history)
-            return jsonify({'message': markdown.markdown(ai_response)})
-        else:
-            return jsonify({'error': 'Failed to connect to model server'}), 500
-    except Exception as e:
-        print(f"Exception: {e}")
-        return jsonify({'error': 'An error occurred on the server.'}), 500
+    return Response(generate(), content_type='text/event-stream')
 
 def handle_commands(command, chat_history):
     command = command.strip().lower()

@@ -4,17 +4,38 @@ function sendMessage() {
     input.value = '';
     updateChatbox(message, 'user');
 
-    // Use EventSource for streaming responses
-    var eventSource = new EventSource('/send_message');
-    
-    eventSource.onmessage = function(event) {
-        updateChatbox(event.data, 'ai');
-    };
-
-    eventSource.onerror = function(event) {
-        updateChatbox('Error connecting to server.', 'ai');
-        eventSource.close();
-    };
+    fetch('/send_message', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({message: message})
+    }).then(response => {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        
+        function readStream() {
+            reader.read().then(({ done, value }) => {
+                if (done) {
+                    return;
+                }
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n\n');
+                lines.forEach(line => {
+                    if (line.startsWith('data: ')) {
+                        const data = JSON.parse(line.slice(6));
+                        updateChatbox(data.content, 'ai');
+                    }
+                });
+                readStream();
+            });
+        }
+        
+        readStream();
+    }).catch(error => {
+        console.error('Error:', error);
+        updateChatbox('Error sending message to server.', 'system');
+    });
 }
 
 function updateChatbox(msg, type) {
@@ -24,12 +45,22 @@ function updateChatbox(msg, type) {
     var parsedContent = DOMPurify.sanitize(marked.parse(msg));
 
     messageElement.innerHTML = parsedContent;
-    if (type === 'ai') {
-        messageElement.classList.add('ai-message');
-    } else {
-        messageElement.classList.add('user-message');
-    }
+    messageElement.classList.add(type + '-message');
     chatbox.appendChild(messageElement);
 
     chatbox.scrollTop = chatbox.scrollHeight;
 }
+
+function loadChatHistory() {
+    fetch('/get_history')
+        .then(response => response.json())
+        .then(history => {
+            document.getElementById('chatbox').innerHTML = '';
+            history.forEach(item => {
+                updateChatbox(item.content, item.role);
+            });
+        })
+        .catch(err => console.error('Error loading history:', err));
+}
+
+document.addEventListener('DOMContentLoaded', loadChatHistory);

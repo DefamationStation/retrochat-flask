@@ -3,3 +3,5 @@
 .env
 chat_history.json
 *.json
+*.db
+chat_history.db

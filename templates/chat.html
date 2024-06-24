@@ -119,20 +119,20 @@
             input.value = '';
             updateChatbox(message, 'user');
 
-            fetch('/send_message', {
+            const eventSource = new EventSource('/send_message', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({message: message})
-            }).then(response => response.json())
-            .then(data => {
-                if (data.refresh) {
-                    location.reload();
-                } else if (data.error) {
-                    updateChatbox(data.error, 'system');
-                } else {
-                    updateChatbox(data.message, 'ai');
-                }
-            }).catch(err => console.error('Error:', err));
+            });
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                updateChatbox(data.content, 'ai');
+            };
+
+            eventSource.onerror = function() {
+                eventSource.close();
+            };
         }
 
         function updateChatbox(msg, type) {
